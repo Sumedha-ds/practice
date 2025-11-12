@@ -292,42 +292,55 @@ class LoginDialog(QDialog):
         self.otp_input.setFocus()
     
     def verify_otp(self):
-        """Verify OTP and check if user exists"""
+        """Verify OTP and check if profile exists (accept any 6-digit OTP)"""
         entered_otp = self.otp_input.text().strip()
         
-        if entered_otp != self.otp:
-            self.status_label.setText('Invalid OTP. Please try again.')
+        # Accept any 6-digit number (no validation)
+        if len(entered_otp) != 6 or not entered_otp.isdigit():
+            self.status_label.setText('Please enter a 6-digit OTP')
             self.status_label.setStyleSheet("color: red;")
-            self.otp_input.clear()
             return
         
-        # OTP verified, check if phone number exists
-        user_exists = self.check_phone_exists(self.phone_number)
+        # OTP accepted (any 6-digit number), check if profile exists
+        profile_exists = self.check_profile_exists(self.phone_number)
         
-        if user_exists:
-            # User exists - login successful
-            self.status_label.setText('Login successful!')
-            self.status_label.setStyleSheet("color: green;")
-            QTimer.singleShot(500, lambda: self.accept())
-            self.login_success.emit(self.phone_number)
+        print(f"DEBUG: Phone: {self.phone_number}, Profile exists: {profile_exists}")  # Debug output
+        
+        if profile_exists:
+            # Profile exists - onboarding completed
+            self.status_label.setText('Onboarding completed! Login successful.')
+            self.status_label.setStyleSheet("color: green; font-weight: bold;")
+            # Show message for longer before closing
+            QTimer.singleShot(2000, lambda: self.accept())
+            QTimer.singleShot(2000, lambda: self.login_success.emit(self.phone_number))
         else:
-            # New user - trigger onboarding
-            self.status_label.setText('New user detected. Starting onboarding...')
+            # No profile - trigger onboarding
+            self.status_label.setText('No profile found. Starting onboarding...')
             self.status_label.setStyleSheet("color: blue;")
-            QTimer.singleShot(500, lambda: self.accept())
-            self.new_user.emit(self.phone_number)
+            QTimer.singleShot(2000, lambda: self.accept())
+            QTimer.singleShot(2000, lambda: self.new_user.emit(self.phone_number))
     
-    def check_phone_exists(self, phone):
-        """Check if phone number exists in database"""
+    def check_profile_exists(self, phone):
+        """Check if profile is created for this phone number"""
         try:
             conn = sqlite3.connect(self.db_path)
             c = conn.cursor()
-            c.execute('SELECT id FROM workers WHERE phone_number = ?', (phone,))
+            # Check if phone exists AND profile_created = 1
+            c.execute('SELECT profile_created FROM workers WHERE phone_number = ?', (phone,))
             result = c.fetchone()
             conn.close()
-            return result is not None
+            # Return True if profile_created = 1, False otherwise
+            if result is not None:
+                profile_created = result[0]
+                print(f"DEBUG: Found phone {phone}, profile_created = {profile_created}")
+                return profile_created == 1
+            else:
+                print(f"DEBUG: Phone {phone} not found in database")
+                return False
         except Exception as e:
-            print(f"Error checking phone: {e}")
+            print(f"Error checking profile: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 
@@ -519,6 +532,7 @@ class VoiceConverterApp(QWidget):
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT,
                     phone_number TEXT,
+                    profile_created INTEGER DEFAULT 0,
                     name TEXT,
                     skill TEXT,
                     education TEXT,
@@ -535,16 +549,22 @@ class VoiceConverterApp(QWidget):
                 '''
             )
             conn.commit()
-            # Add phone_number column if it doesn't exist (for existing databases)
+            # Add missing columns if they don't exist (for existing databases)
             try:
-                # Check if column exists first
+                # Check if columns exist first
                 c.execute("PRAGMA table_info(workers)")
                 columns = [row[1] for row in c.fetchall()]
+                
                 if 'phone_number' not in columns:
                     c.execute("ALTER TABLE workers ADD COLUMN phone_number TEXT")
                     conn.commit()
-                    # Note: SQLite doesn't support adding UNIQUE constraint via ALTER TABLE
-                    # We'll handle uniqueness in application logic
+                
+                if 'profile_created' not in columns:
+                    c.execute("ALTER TABLE workers ADD COLUMN profile_created INTEGER DEFAULT 0")
+                    conn.commit()
+                    # Update existing records to have profile_created = 1 (they have profiles)
+                    c.execute("UPDATE workers SET profile_created = 1 WHERE profile_created IS NULL OR profile_created = 0")
+                    conn.commit()
             except sqlite3.OperationalError as e:
                 # Column might already exist or other error
                 print(f"Note: {e}")
@@ -830,7 +850,7 @@ class VoiceConverterApp(QWidget):
         self.selected_tgt = cfg['tgt_code']
         self.selected_recog = cfg['src_recog']
 
-        # questions with English and Hindi prompt texts
+        # questions with English and Hindi prompt texts (Aadhaar removed)
         self.onboard_questions = [
             {'key': 'name', 'en': 'What is your name?', 'hi': 'आपका नाम क्या है?'},
             {'key': 'skill', 'en': 'What is your skill? (eg: plumber, painter)', 'hi': 'आपका कौशल क्या है? (जैसे: पलंबर, पेंटर)'},
@@ -839,7 +859,6 @@ class VoiceConverterApp(QWidget):
             {'key': 'sex', 'en': 'What is your sex? (male/female)', 'hi': 'आपका लिंग क्या है? (पुरुष/महिला)'},
             {'key': 'experience', 'en': 'How many years of experience?', 'hi': 'अनुभव के वर्षों की संख्या क्या है?'},
             {'key': 'location', 'en': 'Which city or village are you from?', 'hi': 'आप किस शहर या गांव से हैं?'},
-            {'key': 'aadhaar', 'en': 'Please say your Aadhaar number digit by digit', 'hi': 'कृपया अपना आधार संख्या अंक दर अंक बताइए'},
             {'key': 'wage_expected', 'en': 'What is your expected daily wage?', 'hi': 'आपकी अपेक्षित दैनिक मजदूरी क्या है?'},
             {'key': 'languages_known', 'en': 'Which languages do you know?', 'hi': 'आप किन भाषाओं को जानते हैं?'},
         ]
@@ -947,15 +966,14 @@ class VoiceConverterApp(QWidget):
         # Early normalization for gender to reduce errors
         if q['key'] == 'sex':
             text_norm = self._normalize_gender(text_norm)
-        # Early numeric extraction for experience/age/wage_expected and aadhaar digitizing
-        if q['key'] in ('age','experience','wage_expected','aadhaar'):
+        # Early numeric extraction for experience/age/wage_expected (not aadhaar - store as string)
+        if q['key'] in ('age','experience','wage_expected'):
             # prefer digits if present, else parse words
             digits = self._normalize_digits(text_norm)
             if not digits:
                 digits = self._parse_number_words(text_norm)
-            if q['key'] == 'aadhaar':
-                digits = re.sub(r'\D', '', digits)
             text_norm = digits or text_norm
+        # For aadhaar, just store the raw string value as-is
 
         self.onboard_answers[q['key']] = text_norm
         self.update_status(f"Captured answer for {q['key']}")
@@ -976,13 +994,8 @@ class VoiceConverterApp(QWidget):
             c = conn.cursor()
             
             # Check if phone number already exists
-            c.execute('SELECT id FROM workers WHERE phone_number = ?', (self.onboard_phone,))
+            c.execute('SELECT id, profile_created FROM workers WHERE phone_number = ?', (self.onboard_phone,))
             existing = c.fetchone()
-            if existing:
-                conn.close()
-                self.update_status(f'Phone number {self.onboard_phone} already exists. Please login instead.')
-                self.onboarding = False
-                return
             
             raw = json.dumps(self.onboard_answers, ensure_ascii=False)
             # Translate and normalize to English for storage
@@ -1001,27 +1014,52 @@ class VoiceConverterApp(QWidget):
             ans['age'] = _num_clean(ans.get('age'))
             ans['experience'] = _num_clean(ans.get('experience'))
             ans['wage_expected'] = _num_clean(ans.get('wage_expected'))
-            aad = _num_clean(ans.get('aadhaar'))
-            aad = re.sub(r'\D', '', aad)
-            ans['aadhaar'] = aad
+            # Store Aadhaar as raw string value (no normalization)
+            ans['aadhaar'] = str(ans.get('aadhaar', '')).strip()
             ts = datetime.utcnow().isoformat()
-            # Include phone_number in the insert
-            c.execute('INSERT INTO workers (timestamp, phone_number, name, skill, education, age, sex, experience, location, aadhaar, wage_expected, languages_known, raw_answers, audio_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                      (ts,
-                       self.onboard_phone,  # Phone number from login
-                       ans.get('name'),
-                       ans.get('skill'),
-                       ans.get('education'),
-                       ans.get('age'),
-                       ans.get('sex'),
-                       ans.get('experience'),
-                       ans.get('location'),
-                       ans.get('aadhaar'),
-                       ans.get('wage_expected'),
-                       ans.get('languages_known'),
-                       raw,
-                       None
-                       ))
+            
+            if existing:
+                # Phone exists - update the profile and set profile_created = 1
+                worker_id = existing[0]
+                c.execute('''UPDATE workers SET 
+                    timestamp = ?, profile_created = 1, name = ?, skill = ?, education = ?, age = ?, 
+                    sex = ?, experience = ?, location = ?, aadhaar = ?, wage_expected = ?, 
+                    languages_known = ?, raw_answers = ?, audio_path = ?
+                    WHERE id = ?''',
+                    (ts,
+                     ans.get('name'),
+                     ans.get('skill'),
+                     ans.get('education'),
+                     ans.get('age'),
+                     ans.get('sex'),
+                     ans.get('experience'),
+                     ans.get('location'),
+                     ans.get('aadhaar'),
+                     ans.get('wage_expected'),
+                     ans.get('languages_known'),
+                     raw,
+                     None,
+                     worker_id
+                     ))
+            else:
+                # New phone number - insert with profile_created = 1
+                c.execute('INSERT INTO workers (timestamp, phone_number, profile_created, name, skill, education, age, sex, experience, location, aadhaar, wage_expected, languages_known, raw_answers, audio_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                          (ts,
+                           self.onboard_phone,  # Phone number from login
+                           1,  # profile_created = 1
+                           ans.get('name'),
+                           ans.get('skill'),
+                           ans.get('education'),
+                           ans.get('age'),
+                           ans.get('sex'),
+                           ans.get('experience'),
+                           ans.get('location'),
+                           ans.get('aadhaar'),
+                           ans.get('wage_expected'),
+                           ans.get('languages_known'),
+                           raw,
+                           None
+                           ))
             conn.commit()
             conn.close()
             self.update_status(f'Onboarding complete and saved for {self.onboard_phone}')
@@ -1067,8 +1105,9 @@ class VoiceConverterApp(QWidget):
                     if isinstance(val, str) and self._contains_hindi(val):
                         val = self._translate_to_english(val, assumed_src='hi')
                     # Normalize numeric-like columns for display
-                    # display indices: 4=Age, 6=Experience, 8=Aadhaar, 9=Wage (shifted by 1 for phone)
-                    if disp_i in (4, 6, 8, 9):
+                    # display indices: 4=Age, 6=Experience, 9=Wage (shifted by 1 for phone)
+                    # Aadhaar (index 8) is stored as string, no normalization needed
+                    if disp_i in (4, 6, 9):
                         val = self._normalize_digits(val)
                     # Normalize languages column for display (index 10 before actions)
                     if disp_i == 10:
