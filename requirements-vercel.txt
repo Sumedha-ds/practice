@@ -1,0 +1,23 @@
+# Requirements for Vercel deployment (web API)
+# Removed PyQt5 and PyAudio as they don't work in serverless environment
+
+certifi==2024.2.2
+charset-normalizer==3.3.2
+click==8.1.7
+colorama==0.4.6
+gTTS==2.5.1
+idna==3.7
+libretranslatepy==2.1.1
+lxml==5.2.1
+audioop-lts>=0.2.2
+requests==2.31.0
+setuptools==69.5.1
+SpeechRecognition==3.10.3
+translate==3.6.1
+typing_extensions==4.11.0
+urllib3==2.2.1
+fastapi==0.104.1
+python-multipart==0.0.6
+pydantic==2.5.0
+uvicorn==0.24.0
+

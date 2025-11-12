@@ -9,3 +9,6 @@ build/
 .venv/
 
 .idea/
+
+__pycache__/*
+.pycache/*

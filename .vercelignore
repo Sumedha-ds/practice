@@ -1,0 +1,25 @@
+# Files to ignore during Vercel deployment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.db
+*.sqlite
+*.sqlite3
+audio/
+audio_files/
+dist/
+build/
+.venv/
+venv/
+env/
+.env
+.idea/
+.vscode/
+*.spec
+main.py
+requirements.txt
+# Keep requirements-vercel.txt, but rename to requirements.txt before deploy
+
