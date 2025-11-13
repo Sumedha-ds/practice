@@ -40,7 +40,7 @@ curl http://localhost:5000/api/health
 ```bash
 curl -X POST http://localhost:5000/api/auth/verify-otp \
   -H "Content-Type: application/json" \
-  -d '{"phone_number": "9876543210", "otp": "123456"}'
+  -d '{"phone_number": "9876543210", "otp": "1234"}'
 ```
 **Expected Response:**
 ```json
@@ -112,7 +112,7 @@ python test_api.py
 
 ## ✅ Features Verified
 
-1. ✅ **Verify OTP API** - Accepts any 6-digit OTP, returns onboarding status
+1. ✅ **Verify OTP API** - Accepts any 4-digit OTP, returns onboarding status
 2. ✅ **User Choice Question** - Returns TTS audio for voice question
 3. ✅ **Save User Choice** - Processes voice text and saves choice
 4. ✅ **Voice Recognition** - Can process audio files directly

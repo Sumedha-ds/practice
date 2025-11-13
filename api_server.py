@@ -156,13 +156,13 @@ def verify_otp():
             'message': 'Invalid phone number format'
         }), 400
     
-    if not otp or len(otp) != 6 or not otp.isdigit():
+    if not otp or len(otp) != 4 or not otp.isdigit():
         return jsonify({
             'success': False,
-            'message': 'Invalid OTP format. Must be 6 digits.'
+            'message': 'Invalid OTP format. Must be 4 digits.'
         }), 400
     
-    # Accept any 6-digit OTP (no validation)
+    # Accept any 4-digit OTP (no validation)
     # Check if profile exists and onboarding status
     conn = get_db_connection()
     c = conn.cursor()
@@ -353,7 +353,7 @@ def recognize_voice_choice():
         }), 400
     
     audio_file = request.files['audio']
-    language = request.form.get('language', 'en-US')
+    language = request.form.get('language', 'hi-IN')  # Default to Hindi
     
     # Validate audio file
     if audio_file.filename == '':
@@ -387,25 +387,43 @@ def recognize_voice_choice():
         text = recognizer.recognize_google(audio_data, language=language)
         text_lower = text.lower()
         
-        # Process to determine choice
-        apply_keywords = ['apply', 'job', 'apply job', 'apply for job', 'find job', 'search job']
-        post_keywords = ['post', 'post job', 'create job', 'add job', 'list job']
-        learning_keywords = ['learn', 'learning', 'learning module', 'education', 'course', 'training']
+        # Process to determine choice - support both English and Hindi
+        # English keywords
+        apply_keywords_en = ['apply', 'job', 'apply job', 'apply for job', 'find job', 'search job']
+        post_keywords_en = ['post', 'post job', 'create job', 'add job', 'list job']
+        learning_keywords_en = ['learn', 'learning', 'learning module', 'education', 'course', 'training', 'study']
+        
+        # Hindi keywords (both Devanagari and transliterated)
+        apply_keywords_hi = ['अप्लाई', 'जॉब', 'नौकरी', 'काम', 'खोज', 'ढूंढ']
+        post_keywords_hi = ['पोस्ट', 'नौकरी देना', 'भर्ती', 'विज्ञापन']
+        learning_keywords_hi = [
+            'सीखना', 'सीख', 'शिक्षा', 'पढ़ाई', 'पढ़ना', 'ट्रेनिंग', 'प्रशिक्षण',
+            'कोर्स', 'मॉड्यूल', 'लर्निंग', 'एजुकेशन', 'ज्ञान', 'अध्ययन',
+            'seekh', 'padhai', 'training', 'module'
+        ]
+        
+        # Combine all keywords
+        apply_keywords = apply_keywords_en + apply_keywords_hi
+        post_keywords = post_keywords_en + post_keywords_hi
+        learning_keywords = learning_keywords_en + learning_keywords_hi
         
         user_choice = None
         
-        # Check for apply job
-        if any(keyword in text_lower for keyword in apply_keywords):
-            if 'post' not in text_lower:
-                user_choice = 'apply_job'
+        # Check for learning module FIRST (more specific)
+        if any(keyword in text_lower for keyword in ['learning module', 'लर्निंग मॉड्यूल', 'module', 'मॉड्यूल']):
+            user_choice = 'learning_module'
+        elif any(keyword in text_lower for keyword in learning_keywords):
+            user_choice = 'learning_module'
         
         # Check for post job
         if not user_choice and any(keyword in text_lower for keyword in post_keywords):
             user_choice = 'post_job'
         
-        # Check for learning module
-        if not user_choice and any(keyword in text_lower for keyword in learning_keywords):
-            user_choice = 'learning_module'
+        # Check for apply job (check last to avoid conflicts)
+        if not user_choice and any(keyword in text_lower for keyword in apply_keywords):
+            # Make sure it's not "post job"
+            if not any(keyword in text_lower for keyword in ['post', 'पोस्ट']):
+                user_choice = 'apply_job'
         
         if not user_choice:
             return jsonify({
@@ -546,7 +564,7 @@ def save_onboarding_answer():
         
         audio_file = request.files['audio']
         question_key = request.form.get('question_key')
-        language = request.form.get('language', 'en-US')
+        language = request.form.get('language', 'hi-IN')  # Default to Hindi
         
         if not question_key:
             return jsonify({
@@ -1019,8 +1037,30 @@ if __name__ == '__main__':
     # Initialize database
     init_db()
     
+    # Get local IP address for network access
+    import socket
+    try:
+        # Get local IP by connecting to external address (doesn't actually send data)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = "Unable to detect IP"
+    
     # Run server
-    print("Starting API server on http://localhost:5000")
-    print("API Documentation: http://localhost:5000/api/health")
+    print("=" * 70)
+    print("🚀 API Server Starting...")
+    print("=" * 70)
+    print(f"✅ Local access:    http://localhost:5000")
+    print(f"✅ Local access:    http://127.0.0.1:5000")
+    print(f"🌐 Network access:  http://{local_ip}:5000")
+    print("=" * 70)
+    print("📱 From other devices (same Wi-Fi), use:")
+    print(f"   http://{local_ip}:5000")
+    print("=" * 70)
+    print("Press CTRL+C to stop the server")
+    print("=" * 70)
+    
     app.run(host='0.0.0.0', port=5000, debug=True)
 

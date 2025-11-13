@@ -31,7 +31,7 @@ curl -X POST http://localhost:5000/api/auth/user-choice \
 # Get token first
 TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/verify-otp \
   -H "Content-Type: application/json" \
-  -d '{"phone_number": "9876543210", "otp": "123456"}' | \
+  -d '{"phone_number": "9876543210", "otp": "1234"}' | \
   python3 -c "import sys, json; print(json.load(sys.stdin)['token'])")
 
 # Upload audio file (WAV format recommended)
@@ -47,7 +47,7 @@ import requests
 
 # Get token
 response = requests.post('http://localhost:5000/api/auth/verify-otp',
-    json={'phone_number': '9876543210', 'otp': '123456'})
+    json={'phone_number': '9876543210', 'otp': '1234'})
 token = response.json()['token']
 
 # Upload audio file
