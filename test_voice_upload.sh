@@ -11,7 +11,7 @@ echo ""
 echo "Step 1: Verifying OTP..."
 VERIFY_RESPONSE=$(curl -s -X POST "$BASE_URL/api/auth/verify-otp" \
   -H "Content-Type: application/json" \
-  -d '{"phone_number": "9876543210", "otp": "123456"}')
+  -d '{"phone_number": "9876543210", "otp": "1234"}')
 
 echo "Response: $VERIFY_RESPONSE"
 TOKEN=$(echo $VERIFY_RESPONSE | grep -o '"token":"[^"]*' | cut -d'"' -f4)
