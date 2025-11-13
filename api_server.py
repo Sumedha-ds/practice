@@ -64,6 +64,7 @@ from gtts import gTTS
 import base64
 import io
 import tempfile
+from validations import OnboardingValidator, generate_error_voice
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend
@@ -384,7 +385,17 @@ def recognize_voice_choice():
                 raise
         
         # Recognize speech using Google Speech Recognition
-        text = recognizer.recognize_google(audio_data, language=language)
+        text_hindi = recognizer.recognize_google(audio_data, language=language)
+        
+        # Translate Hindi to English for keyword matching
+        try:
+            from translate import Translator
+            translator = Translator(from_lang="hi", to_lang="en")
+            text = translator.translate(text_hindi)
+        except Exception as e:
+            print(f"Translation warning: {e}")
+            text = text_hindi
+        
         text_lower = text.lower()
         
         # Process to determine choice - support both English and Hindi
@@ -590,7 +601,38 @@ def save_onboarding_answer():
                     raise
             
             # Recognize speech
-            answer_text = recognizer.recognize_google(audio_data, language=language)
+            answer_text_hindi = recognizer.recognize_google(audio_data, language=language)
+            
+            # Translate Hindi to English
+            try:
+                from translate import Translator
+                translator = Translator(from_lang="hi", to_lang="en")
+                answer_text = translator.translate(answer_text_hindi)
+            except Exception as e:
+                # If translation fails, use original text
+                print(f"Translation warning: {e}")
+                answer_text = answer_text_hindi
+            
+            # ✅ VALIDATE THE ANSWER
+            is_valid, validated_value, error_message = OnboardingValidator.validate_answer(
+                question_key, 
+                answer_text
+            )
+            
+            if not is_valid:
+                # Generate voice error message in Hindi
+                error_audio = generate_error_voice(error_message)
+                error_audio_base64 = base64.b64encode(error_audio).decode('utf-8') if error_audio else None
+                
+                return jsonify({
+                    'success': False,
+                    'valid': False,
+                    'error_message': error_message,
+                    'error_audio': error_audio_base64,
+                    'question_key': question_key,
+                    'received_text': answer_text,
+                    'original_hindi': answer_text_hindi
+                }), 400
             
             # Save to database (temporary storage until complete_onboarding)
             conn = get_db_connection()
@@ -605,8 +647,8 @@ def save_onboarding_answer():
             else:
                 answers = {}
             
-            # Update answer
-            answers[question_key] = answer_text
+            # Update answer with VALIDATED value
+            answers[question_key] = str(validated_value)
             
             # Save back
             if result:
@@ -623,8 +665,11 @@ def save_onboarding_answer():
             
             return jsonify({
                 'success': True,
+                'valid': True,
                 'question_key': question_key,
-                'answer_text': answer_text,
+                'answer_text': str(validated_value),
+                'original_text': answer_text,
+                'original_hindi': answer_text_hindi,
                 'phone_number': phone
             }), 200
             
@@ -656,6 +701,26 @@ def save_onboarding_answer():
                 'message': 'question_key and answer_text are required'
             }), 400
         
+        # ✅ VALIDATE THE ANSWER
+        is_valid, validated_value, error_message = OnboardingValidator.validate_answer(
+            question_key, 
+            answer_text
+        )
+        
+        if not is_valid:
+            # Generate voice error message in Hindi
+            error_audio = generate_error_voice(error_message)
+            error_audio_base64 = base64.b64encode(error_audio).decode('utf-8') if error_audio else None
+            
+            return jsonify({
+                'success': False,
+                'valid': False,
+                'error_message': error_message,
+                'error_audio': error_audio_base64,
+                'question_key': question_key,
+                'received_text': answer_text
+            }), 400
+        
         try:
             conn = get_db_connection()
             c = conn.cursor()
@@ -669,8 +734,8 @@ def save_onboarding_answer():
             else:
                 answers = {}
             
-            # Update answer
-            answers[question_key] = answer_text
+            # Update answer with VALIDATED value
+            answers[question_key] = str(validated_value)
             
             # Save back
             if result:
@@ -687,8 +752,10 @@ def save_onboarding_answer():
             
             return jsonify({
                 'success': True,
+                'valid': True,
                 'question_key': question_key,
-                'answer_text': answer_text,
+                'answer_text': str(validated_value),
+                'original_text': answer_text,
                 'phone_number': phone
             }), 200
             
