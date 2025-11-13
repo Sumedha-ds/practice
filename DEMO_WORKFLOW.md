@@ -363,3 +363,4 @@ A: Currently needs internet for speech recognition. Can be made offline with Vos
 
 **Good luck with the demo! 🎉**
 
+
