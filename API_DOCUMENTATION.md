@@ -20,17 +20,17 @@ Authorization: Bearer <token>
 ### 1.1 Verify OTP
 **Endpoint:** `POST /auth/verify-otp`
 
-**Description:** Verify OTP (accepts any 6-digit OTP) and check if onboarding is completed
+**Description:** Verify OTP (accepts any 4-digit OTP) and check if onboarding is completed
 
 **Request Body:**
 ```json
 {
   "phone_number": "1234567890",
-  "otp": "123456"
+  "otp": "1234"
 }
 ```
 
-**Note:** Any 6-digit number is accepted as OTP (no validation against generated OTP)
+**Note:** Any 4-digit number is accepted as OTP (no validation against generated OTP)
 
 **Response:**
 ```json
@@ -645,7 +645,7 @@ All endpoints may return these error responses:
 ## Notes
 
 1. **Phone Number Format:** 10 digits, numeric only
-2. **OTP Format:** 6 digits, any number accepted (no validation in demo mode)
+2. **OTP Format:** 4 digits, any number accepted (no validation in demo mode)
 3. **Language Codes:** 
    - English: `en`, `en-US`
    - Hindi: `hi`, `hi-IN`

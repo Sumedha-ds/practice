@@ -45,7 +45,7 @@ As soon as user logs in (after OTP verification), the system asks them via voice
 POST /api/auth/verify-otp
 Body: {
   "phone_number": "1234567890",
-  "otp": "123456"
+  "otp": "1234"
 }
 Response: {
   "phone_number": "1234567890",
