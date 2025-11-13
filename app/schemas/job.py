@@ -1,5 +1,6 @@
+from typing import List, Optional, Union
+
 from pydantic import BaseModel
-from typing import Optional, Union, List
 
 
 class JobAction(BaseModel):
@@ -40,4 +41,21 @@ class JobListResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class JobDetails(BaseModel):
+    jobTitle: str
+    gender: str
+    wage: float
+    city: str
+    audioFilePath: str
+
+    class Config:
+        from_attributes = True
+
+
+class JobPostResponse(BaseModel):
+    message: str
+    jobId: str
+    jobDetails: JobDetails
 

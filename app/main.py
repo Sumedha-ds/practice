@@ -5,9 +5,11 @@ from app.api.v1 import api_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
+from app.db.utils import ensure_jobs_table_schema
 
 # Ensure database tables exist
 Base.metadata.create_all(bind=engine)
+ensure_jobs_table_schema(engine)
 
 # Create FastAPI app
 app = FastAPI(
