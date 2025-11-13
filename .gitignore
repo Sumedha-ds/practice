@@ -9,3 +9,8 @@ build/
 .venv/
 
 .idea/
+
+# Database files
+*.db
+*.db-journal
+jobs.db
