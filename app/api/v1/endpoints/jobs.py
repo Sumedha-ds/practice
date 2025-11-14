@@ -17,14 +17,13 @@ def apply_reject_job(
     job_action: JobAction,
     db: Session = Depends(get_db),
 ) -> MessageResponse:
-    """Apply or reject a job for a user."""
+    """Apply or reject a job for a user. Accepts phone number or user ID."""
     try:
         job_id = int(job_action.jobId)
-        user_id = int(job_action.userId)
     except (ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=400,
-            detail="jobId and userId must be valid integers or numeric strings",
+            detail="jobId must be a valid integer or numeric string",
         ) from exc
 
     if job_action.action not in {"apply", "reject"}:
@@ -37,9 +36,28 @@ def apply_reject_job(
     if not job:
         raise HTTPException(status_code=404, detail=f"Job with id {job_id} not found")
 
-    user = db.query(User).filter(User.id == user_id).first()
+    # Try to find user by phone number first, then by ID
+    user_identifier = str(job_action.userId)
+    user = None
+    
+    # Check if it's a phone number (10 digits) or user ID
+    if len(user_identifier) == 10 and user_identifier.isdigit():
+        # Look up by phone number
+        user = db.query(User).filter(User.phone == user_identifier).first()
+    
+    # If not found by phone, try by ID
     if not user:
-        raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
+        try:
+            user_id = int(user_identifier)
+            user = db.query(User).filter(User.id == user_id).first()
+        except (ValueError, TypeError):
+            pass
+    
+    if not user:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"User with identifier '{user_identifier}' not found. Please use phone number or user ID."
+        )
 
     if job.status == "closed":
         raise HTTPException(
@@ -51,14 +69,14 @@ def apply_reject_job(
 
     user_job = (
         db.query(UserJob)
-        .filter(UserJob.userId == user_id, UserJob.jobId == job_id)
+        .filter(UserJob.userId == user.id, UserJob.jobId == job_id)
         .first()
     )
 
     if user_job:
         user_job.status = status
     else:
-        user_job = UserJob(userId=user_id, jobId=job_id, status=status)
+        user_job = UserJob(userId=user.id, jobId=job_id, status=status)
         db.add(user_job)
 
     db.commit()
