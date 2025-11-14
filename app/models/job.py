@@ -15,4 +15,5 @@ class Job(Base):
     audioScript = Column(Text, nullable=False, default="")  # base64 string or file path
     audioFilePath = Column(String(255), nullable=True)
     status = Column(String(20), default="open")  # open/closed
+    userId = Column(Integer, nullable=True)  # Link to user who posted the job
 

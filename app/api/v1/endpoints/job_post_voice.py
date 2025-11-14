@@ -74,6 +74,81 @@ JOB_POST_QUESTIONS = {
 job_post_answers_storage = {}
 
 
+def extract_wage_amount(text: str) -> float:
+    """
+    Extract wage/salary amount from text.
+    Handles various formats like:
+    - "500", "1000"
+    - "500 rupees", "1000 per day"
+    - "five hundred", "thousand"
+    - "5 thousand", "10 हजार"
+    """
+    import re
+    
+    text = text.lower().strip()
+    
+    # Number word mappings (English and Hindi)
+    number_words = {
+        # English
+        'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+        'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+        'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
+        'thirty': 30, 'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70,
+        'eighty': 80, 'ninety': 90, 'hundred': 100, 'thousand': 1000,
+        'lakh': 100000, 'lac': 100000, 'lakhs': 100000, 'lacs': 100000,
+        
+        # Hindi (transliterated)
+        'ek': 1, 'do': 2, 'teen': 3, 'char': 4, 'paanch': 5, 'panch': 5,
+        'chhe': 6, 'saat': 7, 'aath': 8, 'nau': 9, 'dus': 10,
+        'gyarah': 11, 'barah': 12, 'terah': 13, 'chaudah': 14, 'pandrah': 15,
+        'solah': 16, 'satrah': 17, 'atharah': 18, 'unnis': 19, 'bees': 20,
+        'tees': 30, 'chalis': 40, 'pachas': 50, 'saath': 60, 'sattar': 70,
+        'assi': 80, 'nabbe': 90, 'sau': 100, 'hazaar': 1000, 'hazar': 1000,
+    }
+    
+    # Try to find direct numbers first
+    numbers = re.findall(r'\d+(?:\.\d+)?', text)
+    if numbers:
+        # If there's a multiplier word after the number
+        base_num = float(numbers[0])
+        
+        # Check for multipliers
+        if 'thousand' in text or 'hazaar' in text or 'hazar' in text or 'हजार' in text:
+            return base_num * 1000
+        elif 'lakh' in text or 'lac' in text or 'लाख' in text:
+            return base_num * 100000
+        elif 'hundred' in text or 'sau' in text or 'सौ' in text:
+            return base_num * 100
+        else:
+            return base_num
+    
+    # Try to parse number words
+    total = 0
+    words = text.split()
+    
+    for i, word in enumerate(words):
+        word_clean = re.sub(r'[^\w]', '', word).lower()
+        
+        if word_clean in number_words:
+            value = number_words[word_clean]
+            
+            # Check if it's a multiplier
+            if value >= 100:
+                if total == 0:
+                    total = value
+                else:
+                    total *= value
+            else:
+                total += value
+    
+    if total > 0:
+        return float(total)
+    
+    # If nothing works, raise error
+    raise ValueError(f"Could not extract wage amount from: {text}")
+
+
 def generate_question_audio(question_text: str) -> bytes:
     """Generate TTS audio for a question in Hindi."""
     try:
@@ -293,11 +368,21 @@ async def complete_job_post(
         )
     
     try:
+        # Extract wage amount from text (handles "thousand rupees", "500", etc.)
+        wage_text = answers.get("wage", "0")
+        try:
+            wage_amount = extract_wage_amount(wage_text)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid wage format: {wage_text}. Please provide a numeric amount (e.g., '500', 'thousand', '5 hundred')"
+            )
+        
         # Create the job post
         job = Job(
             jobTitle=answers.get("job_title"),
             gender=answers.get("gender"),
-            wage=float(answers.get("wage", 0)),
+            wage=wage_amount,
             city=answers.get("city"),
             audioScript=answers.get("audio_description", ""),
             userId=user.id
